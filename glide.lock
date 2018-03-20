@@ -1,5 +1,5 @@
-hash: 296c159ccdd668c756fe41dff9ea9ab17e3594860d9631d09e6cb4c945d2ae4e
-updated: 2018-03-15T13:48:14.132305441+08:00
+hash: 130da6d4dd9753519cc7f6e3f8b550a634ec923f9e5189a68f47d3a6e4e21a81
+updated: 2018-03-19T20:16:32.787471227+08:00
 imports:
 - name: github.com/davecgh/go-spew
   version: 782f4967f2dc4564575ca782fe2d04090b5faca8
@@ -123,7 +123,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 389dfa299845bcf399c16af89987e8775718ea48
+  version: 3c2a58f9923aeb5d27fa4d91249e45a1460ca3bd
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -149,8 +149,10 @@ imports:
   - settings/v1alpha1
   - storage/v1
   - storage/v1beta1
+- name: k8s.io/apiextensions-apiserver
+  version: 996a70a27a0dcf53642ca52601b9107cb2ad810a
 - name: k8s.io/apimachinery
-  version: 019ae5ada31de202164b118aee88ee2d14075c31
+  version: 5134afd2c0c91158afac0d8a28bd2177185a3bcc
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
@@ -183,20 +185,27 @@ imports:
   - pkg/util/diff
   - pkg/util/errors
   - pkg/util/framer
+  - pkg/util/httpstream
+  - pkg/util/httpstream/spdy
   - pkg/util/intstr
   - pkg/util/json
+  - pkg/util/mergepatch
   - pkg/util/net
+  - pkg/util/remotecommand
   - pkg/util/runtime
   - pkg/util/sets
+  - pkg/util/strategicpatch
   - pkg/util/validation
   - pkg/util/validation/field
   - pkg/util/wait
   - pkg/util/yaml
   - pkg/version
   - pkg/watch
+  - third_party/forked/golang/json
+  - third_party/forked/golang/netutil
   - third_party/forked/golang/reflect
 - name: k8s.io/client-go
-  version: 35874c597fed17ca62cd197e516d7d5ff9a2958c
+  version: 1b75876d45719a84085528ee621939b0c68a4b85
   subpackages:
   - discovery
   - kubernetes
@@ -249,7 +258,7 @@ imports:
   subpackages:
   - pkg/common
 - name: k8s.io/kubernetes
-  version: 64d864fe1e881f935c6b1f46641daee7f24552cf
+  version: 044cd262c40234014f01b40ed7b9d09adbafe9b1
   subpackages:
   - pkg/api
 testImports:
