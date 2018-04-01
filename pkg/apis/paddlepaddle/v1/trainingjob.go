@@ -1,6 +1,9 @@
 package v1
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"k8s.io/apimachinery/pkg/api/resource"
+)
 
 // Elastic returns true if the job can scale to more workers.
 func (s *TrainingJob) Elastic() bool {
@@ -26,4 +29,31 @@ func (s *TrainingJob) NeedGPU() bool {
 func (s *TrainingJob) String() string {
 	b, _ := json.MarshalIndent(s, "", "   ")
 	return string(b[:])
+}
+
+func (s *TrainingJob) TrainerGPULimit() int {
+	q := s.Spec.Trainer.Resources.Limits.NvidiaGPU()
+	return int(q.Value())
+}
+
+func (s *TrainingJob) TrainerCPURequestMilli() int64 {
+	q := s.Spec.Trainer.Resources.Requests.Cpu()
+	return q.ScaledValue(resource.Milli)
+}
+
+func (s *TrainingJob) TrainerMemRequestMega() int64 {
+	q := s.Spec.Trainer.Resources.Requests.Memory()
+	return q.ScaledValue(resource.Mega)
+}
+
+func (s *TrainingJob) Fulfillment() float64 {
+	minInstance := s.Spec.Trainer.MinInstance
+	maxInstance := s.Spec.Trainer.MaxInstance
+
+	if minInstance == maxInstance {
+		return 1
+	}
+
+	curInstance := int(*s.Spec.Trainer.ReplicaSpec.Spec.Parallelism)
+	return float64(curInstance-minInstance) / float64(maxInstance-minInstance)
 }

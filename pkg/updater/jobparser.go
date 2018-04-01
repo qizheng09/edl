@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	paddlev1 "github.com/paddlepaddle/edl/pkg/apis/paddlepaddle/v1"
+	"github.com/golang/glog"
 )
 
 const (
@@ -103,7 +104,10 @@ func parseToPserver(job *paddlev1.TrainingJob) *v1beta1.ReplicaSet {
 			Kind:       "extensions/v1beta1",
 			APIVersion: "ReplicaSet",
 		},
-		ObjectMeta: job.ObjectMeta,
+		ObjectMeta: metav1.ObjectMeta{
+			Name:job.ObjectMeta.Name+"-pserser",
+			Namespace: job.ObjectMeta.Namespace,
+		},
 		Spec: v1beta1.ReplicaSetSpec{
 			Replicas: &replicas,
 			Template: corev1.PodTemplateSpec{
