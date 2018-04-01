@@ -12,27 +12,35 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"sort"
 	"time"
+	"sync"
 )
 
 const (
-	defaultLoopDur = time.Second * 20
+	defaultLoopDur = time.Second * 5
 )
 
 // Autoscaler launches and scales the training jobs.
 type Autoscaler struct {
 	// kubeCli is standard kubernetes client.
-	KubeCli kubernetes.Interface
+	KubeCli        kubernetes.Interface
 
-	Jobtracker *map[string]*updater.TrainingJobUpdater
+	Jobupdater     *sync.Map
 
 	MaxLoadDesired float64
 }
 
+// WithMaxLoadDesired init with maxLoadDesired
+func WithMaxLoadDesired(maxLoadDesired float64) func(as *Autoscaler) {
+	return func(as *Autoscaler) {
+		as.MaxLoadDesired = maxLoadDesired
+	}
+}
+
 // NewAutoscaler creates a new Autoscaler.
-func NewAutoscaler(kubeClient kubernetes.Interface, jobtracker *map[string]*updater.TrainingJobUpdater, options ...func(*Autoscaler)) *Autoscaler {
+func NewAutoscaler(kubeClient kubernetes.Interface, Jobupdater *sync.Map, options ...func(*Autoscaler)) *Autoscaler {
 	c := &Autoscaler{
 		KubeCli:        kubeClient,
-		Jobtracker:     jobtracker,
+		Jobupdater:     Jobupdater,
 		MaxLoadDesired: 1.0,
 	}
 	for _, option := range options {
@@ -114,24 +122,33 @@ func (a *Autoscaler) InquiryResource() (ClusterResource, error) {
 
 // elastic job filter.
 func elastic(j *padv1.TrainingJob) bool {
-	// TODO(zhengqi):
-	return true
+	return j.Elastic()
 }
+
+// 
+func isRunning(j *padv1.TrainingJob) bool {
+	if j.Status.Phase == padv1.TrainingJobPhaseRunning || j.Status.Phase == padv1.TrainingJobPhaseScaling {
+		return true
+	} else {
+		return false
+	}
+}
+
 
 // sortedJobs return the names of sorted jobs by fulfillment and
 // tiebreakers in ascending order.
-func sortedJobs(j map[string]*updater.TrainingJobUpdater, filters ...func(*padv1.TrainingJob) bool) []*padv1.TrainingJob {
-	var js []*padv1.TrainingJob
-nextJob:
-	for _, v := range j {
-		for _, f := range filters {
-			if !f(v.Job) {
-				continue nextJob
+func sortedJobs(j *sync.Map, filters ...func(*padv1.TrainingJob) bool) []*padv1.TrainingJob {
+	var js trainingjobSlice
+	for _, f := range filters {
+		j.Range(func(k, v interface{}) bool {
+			up := v.(*updater.TrainingJobUpdater)
+			if !f(up.Job) {
+				return true
 			}
-		}
-		js = append(js, v.Job)
+			js = append(js, up.Job)
+			return true
+		})
 	}
-
 	sort.Sort(js)
 	return js
 }
@@ -146,7 +163,7 @@ func searchAssignableNode(r *ClusterResource, j *padv1.TrainingJob) string {
 	return ""
 }
 
-func scaleDryRun(r *ClusterResource, j *padv1.TrainingJob, curDiff int, maxLoadDesired float64, scaleDown bool) (additional int) {
+func scaleDryRun(r *ClusterResource, j *padv1.TrainingJob, curDiff int32, maxLoadDesired float64, scaleDown bool)(additional int) {
 	additionalGPUInstance := 0
 	additionalCPUInstance := 0
 	cpuRequestMilli := j.TrainerCPURequestMilli()
@@ -169,7 +186,7 @@ func scaleDryRun(r *ClusterResource, j *padv1.TrainingJob, curDiff int, maxLoadD
 	// count the pod manually. And calculate the additional value
 	// based on the running pod count,
 	// j.TrainerJob.Spec.Parallelism, and curDiff.
-	plannedInstance := int(*j.Spec.Trainer.ReplicaSpec.Spec.Parallelism) + curDiff
+	plannedInstance := int(*j.Spec.Trainer.ReplicaSpec.Spec.Parallelism) + int(curDiff)
 	instanceMax := j.Spec.Trainer.MaxInstance
 	instanceMin := j.Spec.Trainer.MinInstance
 
@@ -239,14 +256,18 @@ func scaleDryRun(r *ClusterResource, j *padv1.TrainingJob, curDiff int, maxLoadD
 }
 
 func (a *Autoscaler) setAdditional(diff map[string]int32) {
-	for name := range *a.Jobtracker {
-		_, ok := diff[name]
+	a.Jobupdater.Range(func(k, v interface{}) bool {
+		key := k.(string)
+		up := v.(*updater.TrainingJobUpdater)
+		_, ok := diff[key]
 		if !ok {
-			(*a.Jobtracker)[name].Additional == diff[name]
+			up.Additional = diff[key]
 		} else {
-			(*a.Jobtracker)[name].Additional = 0
+			up.Additional =  0
 		}
-	}
+		a.Jobupdater.Store(k, up)
+		return true
+	})
 }
 
 // scaleAllJobsDryRun pretends to rescale all jobs in order to find
@@ -257,11 +278,11 @@ func (a *Autoscaler) scaleAllJobsDryRun(r ClusterResource, maxLoadDesired float6
 	diff := make(map[string]int32)
 	for {
 		noChange := true
-		sorted := sortedJobs(&a.Jobtracker, elastic)
+		sorted := sortedJobs(a.Jobupdater, elastic, isRunning)
 		dryRun := func(j *padv1.TrainingJob, isScaleDown bool) {
-			name := j.Name
+			name := j.Namespace + "/" +j.Name
 			additional := scaleDryRun(&r, j, diff[name], maxLoadDesired, isScaleDown)
-			diff[name] += additional
+			diff[name] += int32(additional)
 
 			if additional != 0 {
 				noChange = false
@@ -291,12 +312,14 @@ func (a *Autoscaler) scaleAllJobsDryRun(r ClusterResource, maxLoadDesired float6
 }
 
 func (a *Autoscaler) scaleAllJobs() {
-	for name, value := range *a.Jobtracker {
-		if value.Additional != int32(0) {
-			log.Infof("additional of trainingjob %v not equal 0, scale it", name)
-			value.Scale()
+	a.Jobupdater.Range(func(k, v interface{}) bool {
+		up := v.(*updater.TrainingJobUpdater)
+		if up.Additional != int32(0) {
+			log.Infof("additional of trainingjob %v not equal 0, scale it", k)
+			up.Scale()
 		}
-	}
+		return true
+	})
 }
 
 // Run monitors the cluster resources and training jobs in a loop,

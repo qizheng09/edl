@@ -320,7 +320,12 @@ func (updater *TrainingJobUpdater) parseTrainingJob() {
 	}
 
 	err := func() error {
-		// TODO(Zhengqi): Parse TrainingJob, this will be submitted in the next pr
+		var parser DefaultJobParser
+		err := parser.Validate(updater.Job)
+		if err != nil {
+			return err
+		}
+		updater.Job = parser.ParseToTrainingJob(updater.Job)
 		return nil
 	}()
 
@@ -461,7 +466,7 @@ func (updater *TrainingJobUpdater) scale(additional int32) *padv1.TrainerJobScal
 		Additional:     additional,
 	}
 	resource := updater.Job.Spec.Trainer.ReplicaSpec
-	resource.Spec.Parallelism = resource.Spec.Parallelism + &additional
+	*resource.Spec.Parallelism = *resource.Spec.Parallelism + additional
 
 	_, err := updater.KubeClient.BatchV1().Jobs(updater.Job.Namespace).Update(resource)
 	if err != nil {
@@ -473,7 +478,7 @@ func (updater *TrainingJobUpdater) scale(additional int32) *padv1.TrainerJobScal
 		scaleRecord.Reason = ""
 		updater.Status.Phase = padv1.TrainingJobPhaseScaling
 	}
-	updater.Status.ScaleRecords = append(updater.Status.ScaleRecords, scaleRecord)
+	updater.Status.ScaleRecords.ScaleRecords = append(updater.Status.ScaleRecords.ScaleRecords, scaleRecord)
 	return scaleRecord
 }
 

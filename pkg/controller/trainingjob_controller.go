@@ -27,6 +27,7 @@ import (
 	paddleinformers "github.com/paddlepaddle/edl/pkg/client/informers/externalversions"
 	paddlelisters "github.com/paddlepaddle/edl/pkg/client/listers/paddlepaddle/v1"
 	"github.com/paddlepaddle/edl/pkg/updater"
+	"github.com/paddlepaddle/edl/pkg/autoscaler"
 )
 
 type TrainingJobController struct {
@@ -101,7 +102,7 @@ func New(
 // informer caches and starting workers. It will block until stopCh
 // is closed, at which point it will shutdown the workqueue and wait for
 // workers to finish processing their current work items.
-func (c *TrainingJobController) Run(threadiness int, stopCh <-chan struct{}) error {
+func (c *TrainingJobController) Run(threadiness int, maxLoadDesired float64, stopCh <-chan struct{}) error {
 	// TODO add a lock to ensure there is only one controller in the cluster
 	defer runtime.HandleCrash()
 	defer c.workqueue.ShutDown()
@@ -124,6 +125,11 @@ func (c *TrainingJobController) Run(threadiness int, stopCh <-chan struct{}) err
 	}
 
 	glog.Info("Started workers")
+	glog.Info("Started autoscaler")
+	as := autoscaler.NewAutoscaler(c.KubeCli, c.jobupdater, autoscaler.WithMaxLoadDesired(maxLoadDesired))
+	as.Run()
+
+
 	<-stopCh
 	glog.Info("Shutting down workers")
 
@@ -170,7 +176,11 @@ func (c *TrainingJobController) enqueue(obj interface{}) {
 }
 
 func (c *TrainingJobController) dequeue(obj interface{}) {
-	job := obj.(*paddlev1.TrainingJob)
+	job, ok := obj.(*paddlev1.TrainingJob)
+	if !ok {
+		runtime.HandleError(fmt.Errorf("type conversion error: %+v", obj))
+		return
+	}
 	key := job.Namespace + "/" + job.Name
 	glog.Infof("dequeue key: %v", key)
 	jobToDelete, ok := c.jobupdater.Load(key)
@@ -191,7 +201,6 @@ func (c *TrainingJobController) runWorker() {
 
 func (c *TrainingJobController) processNestWorkItem() bool {
 	obj, shutdown := c.workqueue.Get()
-
 	if shutdown {
 		return false
 	}

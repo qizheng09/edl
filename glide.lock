@@ -1,5 +1,5 @@
 hash: 130da6d4dd9753519cc7f6e3f8b550a634ec923f9e5189a68f47d3a6e4e21a81
-updated: 2018-03-19T20:16:32.787471227+08:00
+updated: 2018-03-21T12:56:01.80251951+08:00
 imports:
 - name: github.com/davecgh/go-spew
   version: 782f4967f2dc4564575ca782fe2d04090b5faca8
@@ -30,6 +30,10 @@ imports:
   - sortkeys
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
+- name: github.com/golang/groupcache
+  version: 02826c3e79038b59d737d3b1c0a1d937f71a4433
+  subpackages:
+  - lru
 - name: github.com/golang/protobuf
   version: 4bd1920723d7b7c925de087aa32e2187708897f7
   subpackages:
@@ -151,6 +155,12 @@ imports:
   - storage/v1beta1
 - name: k8s.io/apiextensions-apiserver
   version: 996a70a27a0dcf53642ca52601b9107cb2ad810a
+  subpackages:
+  - pkg/apis/apiextensions
+  - pkg/apis/apiextensions/v1beta1
+  - pkg/client/clientset/clientset
+  - pkg/client/clientset/clientset/scheme
+  - pkg/client/clientset/clientset/typed/apiextensions/v1beta1
 - name: k8s.io/apimachinery
   version: 5134afd2c0c91158afac0d8a28bd2177185a3bcc
   subpackages:
@@ -208,6 +218,7 @@ imports:
   version: 1b75876d45719a84085528ee621939b0c68a4b85
   subpackages:
   - discovery
+  - discovery/fake
   - kubernetes
   - kubernetes/scheme
   - kubernetes/typed/admissionregistration/v1alpha1
@@ -237,20 +248,25 @@ imports:
   - pkg/version
   - rest
   - rest/watch
+  - testing
   - tools/auth
   - tools/cache
   - tools/clientcmd
   - tools/clientcmd/api
   - tools/clientcmd/api/latest
   - tools/clientcmd/api/v1
+  - tools/leaderelection
+  - tools/leaderelection/resourcelock
   - tools/metrics
   - tools/pager
+  - tools/record
   - tools/reference
   - transport
   - util/cert
   - util/flowcontrol
   - util/homedir
   - util/integer
+  - util/workqueue
 - name: k8s.io/code-generator
   version: 25fd8c8ddbf75b223882df4479f8b8e615da05ae
 - name: k8s.io/kube-openapi
@@ -258,7 +274,7 @@ imports:
   subpackages:
   - pkg/common
 - name: k8s.io/kubernetes
-  version: 044cd262c40234014f01b40ed7b9d09adbafe9b1
+  version: cef6c11ced830d6cfbb2694062171f36243d7596
   subpackages:
   - pkg/api
 testImports:
